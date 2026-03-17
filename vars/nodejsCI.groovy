@@ -1,4 +1,11 @@
 def call(Map configMap){
+    def AWS_REGION = configMap.Aws_Region
+    def ACCOUNT_ID = configMap.Account_ID
+    def PROJECT    = configMap.Project
+    def COMPONENT  = configMap.Component
+    def GIT_URL    = configMap.GitRepo
+    def GIT_BRANCH = configMap.Branch ?: "main"
+
     pipeline {
         agent { label 'agent' }
 
@@ -8,17 +15,14 @@ def call(Map configMap){
         }
         
         environment {
-            AWS_REGION = configMap.get("Aws_Region")
-            ACCOUNT_ID = configMap.get("Account_ID")
-            IMAGE_TAG = "${BUILD_NUMBER}"
-
-            PROJECT = configMap.get("Project")
-            COMPONENT = configMap.get("Component")
-
-            GIT_URL     = configMap.get("GitRepo")
-            GIT_BRANCH  = configMap.get("Branch") ?: "main"
-
-            ECR_REPO = "${PROJECT}/${COMPONENT}"
+            AWS_REGION = "${AWS_REGION}"
+            ACCOUNT_ID = "${ACCOUNT_ID}"
+            IMAGE_TAG  = "${BUILD_NUMBER}"
+            PROJECT    = "${PROJECT}"
+            COMPONENT  = "${COMPONENT}"
+            GIT_URL    = "${GIT_URL}"
+            GIT_BRANCH = "${GIT_BRANCH}"
+            ECR_REPO   = "${PROJECT}/${COMPONENT}"   
         }
         
 
@@ -75,7 +79,7 @@ def call(Map configMap){
             }
             stage('Trigger CD Pipeline') {
                 when {
-                    branch 'main'
+                    expression { env.GIT_BRANCH == 'main' }
                 }
                 steps {
                     build job: "${COMPONENT}-cd", parameters: [
