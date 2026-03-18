@@ -1,10 +1,11 @@
 def call(Map configMap){
-    def AWS_REGION = configMap.Aws_Region
-    def ACCOUNT_ID = configMap.Account_ID
-    def PROJECT    = configMap.Project
-    def COMPONENT  = configMap.Component
-    def GIT_URL    = configMap.GitRepo
-    def GIT_BRANCH = configMap.Branch ?: "main"
+
+    def AWS_REGION = configMap.AWS_REGION
+    def ACCOUNT_ID = configMap.ACCOUNT_ID
+    def PROJECT    = configMap.PROJECT
+    def COMPONENT  = configMap.COMPONENT
+    def GIT_URL    = configMap.GIT_URL
+    def GIT_BRANCH = configMap.BRANCH ?: "main"
 
     pipeline {
         agent { label 'agent' }
@@ -17,7 +18,7 @@ def call(Map configMap){
         environment {
             AWS_REGION = "${AWS_REGION}"
             ACCOUNT_ID = "${ACCOUNT_ID}"
-            IMAGE_TAG  = "${BUILD_NUMBER}"
+            IMAGE_TAG  = ""
             PROJECT    = "${PROJECT}"
             COMPONENT  = "${COMPONENT}"
             GIT_URL    = "${GIT_URL}"
@@ -62,6 +63,17 @@ def call(Map configMap){
                 }
             }
 
+            stage('Get Image Tag') {
+                steps {
+                    script {
+                        env.IMAGE_TAG = sh(
+                            script: "git rev-parse --short HEAD",
+                            returnStdout: true
+                        ).trim()
+                    }
+                }
+            }
+
             stage('Build Docker Image') {
                 steps {
                     sh '''
@@ -79,7 +91,7 @@ def call(Map configMap){
             }
             stage('Trigger CD Pipeline') {
                 when {
-                    expression { env.GIT_BRANCH == 'main' }
+                    branch 'main'
                 }
                 steps {
                     build job: "${COMPONENT}-cd", parameters: [

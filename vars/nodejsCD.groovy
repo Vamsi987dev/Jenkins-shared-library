@@ -1,4 +1,8 @@
 def call(Map configMap){
+    def AWS_REGION = configMap.AWS_REGION
+    def ACCOUNT_ID = configMap.ACCOUNT_ID
+    def PROJECT    = configMap.PROJECT
+    def COMPONENT  = configMap.COMPONENT
 
     pipeline {
         agent { label 'agent' }
@@ -9,22 +13,20 @@ def call(Map configMap){
         }
 
         parameters {
-            choice(name: 'ENVIRONMENT', choices: ['dev','qa','prod'], description: 'Select Environment')
+            choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat''prod'], description: 'Select Environment')
             string(name: 'IMAGE_TAG', description: 'Docker image tag to deploy')
         }
 
         environment {
-            AWS_REGION = configMap.get("Aws_Region")
-            ACCOUNT_ID = configMap.get("Account_ID")
-
-            PROJECT = configMap.get("Project")
-            COMPONENT = configMap.get("Component")
+            AWS_REGION = "${AWS_REGION}"
+            ACCOUNT_ID = "${ACCOUNT_ID}"
+            PROJECT    = "${PROJECT}"
+            COMPONENT  = "${COMPONENT}"
 
             ENVIRONMENT = "${params.ENVIRONMENT}"
 
             ECR_REPO = "${PROJECT}/${COMPONENT}"
-
-            CLUSTER = "${PROJECT}-${ENVIRONMENT}"
+            CLUSTER  = "${PROJECT}-${ENVIRONMENT}"
         }
 
         stages {
