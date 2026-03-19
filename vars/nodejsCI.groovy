@@ -75,12 +75,12 @@ def call(Map configMap){
                             error "Version missing in package.json. Failing pipeline."
                         }
 
-                        def version = packageJson.version
-                        env.IMAGE_TAG = version
+                        
+                        env.IMAGE_TAG = packageJson.version.toString()
 
                         echo "Building ${PROJECT}-${COMPONENT}"
                         echo "Environment: ${ENV}"
-                        echo "Image Tag: ${version}"
+                        echo "Image Tag: ${env.IMAGE_TAG}"
                     }
                 }
             }
