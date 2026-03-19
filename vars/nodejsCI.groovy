@@ -116,6 +116,12 @@ def call(Map configMap){
                 }
             }
 
+            stage('Debug Image Tag') {
+                steps {
+                    echo "IMAGE_TAG value: ${env.IMAGE_TAG}"
+                }
+            }
+
             stage('Docker Build') {
                 steps {
                     sh '''
