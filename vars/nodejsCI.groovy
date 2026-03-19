@@ -5,7 +5,7 @@ def call(Map configMap){
     def PROJECT    = configMap.PROJECT
     def COMPONENT  = configMap.COMPONENT
     def GIT_URL    = configMap.GIT_URL
-    def GIT_BRANCH = configMap.BRANCH ?: "main"
+    def GIT_BRANCH = (configMap.BRANCH && configMap.BRANCH != "null") ? configMap.BRANCH : "main"
     def ENVIRONMENT = configMap.ENVIRONMENT ?: "dev"
     def CD_JOB     = configMap.CD_JOB ?: "${COMPONENT}-cd"
 
@@ -38,6 +38,7 @@ def call(Map configMap){
 
             stage('Checkout Code') {
                 steps {
+                    echo "Checking out branch: ${GIT_BRANCH}"
                     git branch: "${GIT_BRANCH}", url: "${GIT_URL}"
                 }
             }
