@@ -6,6 +6,8 @@ def call(Map configMap){
     def COMPONENT  = configMap.COMPONENT
     def GIT_URL    = configMap.GIT_URL
     def GIT_BRANCH = configMap.BRANCH ?: "main"
+    def ENVIRONMENT = configMap.ENVIRONMENT ?: "dev"
+    def CD_JOB     = configMap.CD_JOB ?: "${COMPONENT}-cd"
 
     pipeline {
         agent { label 'agent' }
@@ -14,26 +16,31 @@ def call(Map configMap){
             timeout(time: 30, unit: 'MINUTES')
             disableConcurrentBuilds()
         }
-        
+
+        parameters {
+            booleanParam(name: 'deploy', defaultValue: false, description: 'Trigger CD?')
+        }
+
         environment {
             AWS_REGION = "${AWS_REGION}"
             ACCOUNT_ID = "${ACCOUNT_ID}"
-            IMAGE_TAG  = ""
             PROJECT    = "${PROJECT}"
             COMPONENT  = "${COMPONENT}"
             GIT_URL    = "${GIT_URL}"
             GIT_BRANCH = "${GIT_BRANCH}"
-            ECR_REPO   = "${PROJECT}/${COMPONENT}"   
+            ENV        = "${ENVIRONMENT}"
+
+            ECR_REPO   = "${PROJECT}/${ENV}/${COMPONENT}"
+            IMAGE_TAG  = ""
         }
-        
 
         stages {
+
             stage('Checkout Code') {
                 steps {
                     git branch: "${GIT_BRANCH}", url: "${GIT_URL}"
                 }
             }
-
             // stage('SonarQube Scan') {
             //     environment {
             //         scannerHome = tool 'sonar-8.0'
@@ -54,30 +61,68 @@ def call(Map configMap){
             //     }
             // }
 
-            stage('Login to ECR') {
-                steps {
-                    sh '''
-                    aws ecr get-login-password --region $AWS_REGION | \
-                    docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-                    '''
-                }
-            }
-
-            stage('Get Image Tag') {
+            stage('Prepare Version') {
                 steps {
                     script {
-                        env.IMAGE_TAG = sh(
-                            script: "git rev-parse --short HEAD",
-                            returnStdout: true
-                        ).trim()
+                        if (!fileExists('package.json')) {
+                            error " package.json not found. Failing pipeline."
+                        }
+
+                        def packageJson = readJSON file: 'package.json'
+
+                        if (!packageJson.version) {
+                            error " Version missing in package.json. Failing pipeline."
+                        }
+
+                        env.IMAGE_TAG = "${packageJson.version}"
+
+                        echo "Building ${PROJECT}-${COMPONENT}"
+                        echo "Environment: ${ENV}"
+                        echo "Image Tag: ${IMAGE_TAG}"
                     }
                 }
             }
 
-            stage('Build Docker Image') {
+            stage('Install Dependencies') {
+                when {
+                    expression { fileExists('package.json') }
+                }
+                steps {
+                    sh 'npm install'
+                }
+            }
+
+            stage('Login to ECR') {
+                steps {
+                    withAWS(region: "${AWS_REGION}", credentials: "aws-creds-${ENV}") {
+                        retry(2) {
+                            sh '''
+                            aws ecr get-login-password --region $AWS_REGION | \
+                            docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+                            '''
+                        }
+                    }
+                }
+            }
+
+            stage('Ensure ECR Repo Exists') {
                 steps {
                     sh '''
+                    aws ecr describe-repositories --repository-names $ECR_REPO || \
+                    aws ecr create-repository --repository-name $ECR_REPO
+                    '''
+                }
+            }
+
+            stage('Docker Build') {
+                steps {
+                    sh '''
+                    docker system prune -f || true
+
                     docker build -t $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG .
+
+                    docker tag $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG \
+                               $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
                     '''
                 }
             }
@@ -86,38 +131,46 @@ def call(Map configMap){
                 steps {
                     sh '''
                     docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+                    docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
                     '''
                 }
             }
+
             stage('Trigger CD Pipeline') {
                 when {
-                    branch 'main'
+                    allOf {
+                        branch 'main'
+                        expression { params.deploy }
+                    }
                 }
                 steps {
-                    build job: "${COMPONENT}-cd", parameters: [
-                        string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}")
-                    ]
+                    build job: "${CD_JOB}", parameters: [
+                        string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}"),
+                        string(name: 'ENVIRONMENT', value: "${ENV}")
+                    ], wait: true
                 }
             }
-            
-            stage('Cleanup Docker Images') {
+
+            stage('Cleanup') {
                 steps {
                     sh '''
                     docker rmi $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG || true
+                    docker rmi $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest || true
                     '''
                 }
             }
         }
 
         post {
-            success {
-                echo 'Docker image built and pushed successfully!'
+            always {
+                deleteDir()
             }
-
+            success {
+                echo ' Docker image built & pushed successfully!'
+            }
             failure {
-                echo 'Pipeline failed. Check logs.'
+                echo ' Pipeline failed. Check logs.'
             }
         }
-
     }
 }
