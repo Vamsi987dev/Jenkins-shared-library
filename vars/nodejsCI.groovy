@@ -113,11 +113,11 @@ def call(Map configMap){
                 }
             }
 
-            stage('Debug Image Tag') {
-                steps {
-                    echo "IMAGE_TAG value: ${env.IMAGE_TAG}"
-                }
-            }
+            // stage('Debug Image Tag') {
+            //     steps {
+            //         echo "IMAGE_TAG value: ${env.IMAGE_TAG}"
+            //     }
+            // }
 
             stage('Docker Build') {
                 steps {
@@ -143,10 +143,7 @@ def call(Map configMap){
 
             stage('Trigger CD Pipeline') {
                 when {
-                    allOf {
-                        branch 'main'
-                        expression { params.deploy }
-                    }
+                    expression { GIT_BRANCH == "main" && params.deploy }
                 }
                 steps {
                     build job: "${CD_JOB}", parameters: [
