@@ -66,20 +66,21 @@ def call(Map configMap){
                 steps {
                     script {
                         if (!fileExists('package.json')) {
-                            error " package.json not found. Failing pipeline."
+                            error "package.json not found. Failing pipeline."
                         }
 
                         def packageJson = readJSON file: 'package.json'
 
-                        if (!packageJson.version) {
-                            error " Version missing in package.json. Failing pipeline."
+                        if (!packageJson.version?.trim()) {
+                            error "Version missing in package.json. Failing pipeline."
                         }
 
-                        env.IMAGE_TAG = "${packageJson.version}"
+                        def version = packageJson.version
+                        env.IMAGE_TAG = version
 
                         echo "Building ${PROJECT}-${COMPONENT}"
                         echo "Environment: ${ENV}"
-                        echo "Image Tag: ${IMAGE_TAG}"
+                        echo "Image Tag: ${version}"
                     }
                 }
             }
