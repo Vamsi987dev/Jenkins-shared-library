@@ -31,7 +31,7 @@ def call(Map configMap){
             ENV        = "${ENVIRONMENT}"
 
             ECR_REPO   = "${PROJECT}/${ENV}/${COMPONENT}"
-            IMAGE_TAG  = ""
+            
         }
 
         stages {
@@ -75,12 +75,9 @@ def call(Map configMap){
                             error "Version missing in package.json. Failing pipeline."
                         }
 
-                        
-                        env.IMAGE_TAG = packageJson.version.toString()
+                        env.IMAGE_TAG = "${packageJson.version}"
 
-                        echo "Building ${PROJECT}-${COMPONENT}"
-                        echo "Environment: ${ENV}"
-                        echo "Image Tag: ${env.IMAGE_TAG}"
+                        echo "DEBUG → IMAGE_TAG set to: ${env.IMAGE_TAG}"
                     }
                 }
             }
